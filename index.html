@@ -1,70 +1,34 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>Local Media Library</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Local Media Hub</title>
 
-  <!-- External CSS -->
-  <link rel="stylesheet" href="assets/css/styles.css" />
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+
+    <!-- Babel for JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="/assets/css/styles.css" />
 </head>
 <body>
-  <header class="app-header">
-    <h1>Local Media Library</h1>
-    <p class="subtitle">Browse and filter your media files</p>
-  </header>
+    <div id="root"></div>
 
-  <main class="app-main">
-    <section class="controls">
-      <div class="control-group">
-        <label for="searchInput">Search</label>
-        <input
-          type="text"
-          id="searchInput"
-          placeholder="Search by name, type, or path..."
-        />
-      </div>
-
-      <div class="control-group">
-        <label for="typeFilter">Type</label>
-        <select id="typeFilter">
-          <option value="all">All types</option>
-          <option value="audio">Audio</option>
-          <option value="video">Video</option>
-          <option value="image">Image</option>
-          <option value="other">Other</option>
-        </select>
-      </div>
-
-      <div class="control-group">
-        <label for="sortSelect">Sort by</label>
-        <select id="sortSelect">
-          <option value="name-asc">Name (A → Z)</option>
-          <option value="name-desc">Name (Z → A)</option>
-          <option value="size-asc">Size (small → large)</option>
-          <option value="size-desc">Size (large → small)</option>
-        </select>
-      </div>
-    </section>
-
-    <section id="libraryStats" class="stats">
-      <!-- JS will populate basic stats here -->
-    </section>
-
-    <section id="mediaGrid" class="media-grid">
-      <!-- JS will render media items here -->
-    </section>
-
-    <section id="emptyState" class="empty-state hidden">
-      <p>No media found. Try adjusting your filters or search.</p>
-    </section>
-  </main>
-
-  <footer class="app-footer">
-    <p>Local Media Library &mdash; running in your browser.</p>
-  </footer>
-
-  <!-- External JS (defer so DOM is ready) -->
-  <script src="assets/js/app.js" defer></script>
+    <!-- App code compiled by Babel in the browser -->
+    <script
+        type="text/babel"
+        src="/assets/js/app.jsx"
+        data-presets="env,react"
+    ></script>
 </body>
 </html>

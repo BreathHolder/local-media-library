@@ -10,6 +10,7 @@ app = Flask(__name__)
 # --- Configuration ---
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.abspath(os.path.join(SCRIPT_DIR, '../../'))
+ASSETS_FOLDER = os.path.join(PROJECT_ROOT, 'assets')
 
 # New Database Directory: ./assets/db/
 DB_FOLDER = os.path.join(PROJECT_ROOT, 'assets', 'db')
@@ -393,6 +394,12 @@ def get_creators():
     data = load_all_media()
     creators = list(set(item['creator'] for item in data))
     return jsonify(creators)
+
+@app.route('/assets/<path:filename>')
+def serve_assets(filename):
+    """Serve CSS, JS, and other static assets from the assets folder."""
+    return send_from_directory(ASSETS_FOLDER, filename)
+
 
 if __name__ == '__main__':
     print("-------------------------------------------------------")
