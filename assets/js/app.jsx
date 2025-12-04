@@ -5,8 +5,8 @@ const MOCK_DATA = [
     {
         id: 1,
         type: "image",
-        path: "/media_content/Mathew Sturdevant/2024/camera.jpg",
-        creator: "Mathew Sturdevant",
+        path: "/media_content/breathholder/2024/camera.jpg",
+        creator: "breathholder",
         category: "Photography",
         tags: ["camera", "_cover"],
         original_name: "camera.jpg",
@@ -16,11 +16,11 @@ const MOCK_DATA = [
     {
         id: 2,
         type: "image",
-        path: "/media_content/Brandi Sturdevant/group.jpg",
-        creator: "Brandi Sturdevant",
-        category: "Family",
+        path: "/media_content/dumdum/group.jpg",
+        creator: "dumdum",
+        category: "Screenshots",
         tags: ["friends"],
-        original_name: "group.jpg",
+        original_name: "game.jpg",
         custom_title: "",
         hidden: false,
     },
@@ -289,7 +289,7 @@ const App = () => {
 
     const [uploadForm, setUploadForm] = useState({
         file: null,
-        creator: "Mathew Sturdevant",
+        creator: "breathholder",
         category: "General",
         tags: "",
         is_hidden: false,
@@ -544,7 +544,7 @@ const App = () => {
                 setIsUploadOpen(false);
                 setUploadForm({
                     file: null,
-                    creator: "Mathew Sturdevant",
+                    creator: "breathholder",
                     category: "General",
                     tags: "",
                     is_hidden: false,
@@ -1003,8 +1003,8 @@ const App = () => {
                                         onChange={handleUploadChange}
                                     />
                                     <datalist id="creators-list">
-                                        <option value="Mathew Sturdevant" />
-                                        <option value="Brandi Sturdevant" />
+                                        <option value="breathholder" />
+                                        <option value="dumdum" />
                                     </datalist>
                                     <div className="grid grid-cols-2 gap-4">
                                         <input
