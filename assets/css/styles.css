@@ -1,0 +1,229 @@
+:root {
+  --bg: #0f172a;
+  --bg-elevated: #111827;
+  --accent: #38bdf8;
+  --accent-soft: rgba(56, 189, 248, 0.15);
+  --text: #e5e7eb;
+  --muted: #9ca3af;
+  --border: #1f2937;
+  --danger: #f97373;
+  --radius-lg: 12px;
+  --radius-sm: 6px;
+  --shadow-soft: 0 10px 30px rgba(0, 0, 0, 0.4);
+  --font: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+}
+
+body {
+  font-family: var(--font);
+  background: radial-gradient(circle at top, #1f2937 0%, #020617 60%);
+  color: var(--text);
+  display: flex;
+  flex-direction: column;
+}
+
+/* Layout */
+
+.app-header {
+  padding: 1.5rem clamp(1.25rem, 3vw, 3rem);
+  border-bottom: 1px solid var(--border);
+  background: linear-gradient(
+    135deg,
+    rgba(56, 189, 248, 0.1),
+    rgba(129, 140, 248, 0.05)
+  );
+  backdrop-filter: blur(10px);
+}
+
+.app-header h1 {
+  margin: 0 0 0.25rem;
+  font-size: clamp(1.6rem, 3vw, 2.2rem);
+}
+
+.subtitle {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+.app-main {
+  flex: 1;
+  padding: 1.25rem clamp(1.25rem, 3vw, 3rem) 2rem;
+  max-width: 1200px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+/* Controls */
+
+.controls {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: minmax(0, 2fr) repeat(2, minmax(0, 1fr));
+  margin-bottom: 1.25rem;
+}
+
+@media (max-width: 768px) {
+  .controls {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.control-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.control-group label {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.control-group input,
+.control-group select {
+  padding: 0.55rem 0.75rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: #020617;
+  color: var(--text);
+  font-size: 0.9rem;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease,
+    background 0.15s ease;
+}
+
+.control-group input:focus,
+.control-group select:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent-soft);
+}
+
+/* Stats */
+
+.stats {
+  margin-bottom: 1.25rem;
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius-lg);
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid var(--border);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  font-size: 0.85rem;
+}
+
+.stats-item {
+  display: flex;
+  gap: 0.35rem;
+  align-items: baseline;
+}
+
+.stats-label {
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 0.75rem;
+}
+
+.stats-value {
+  font-weight: 600;
+}
+
+/* Media grid */
+
+.media-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 1rem;
+}
+
+.media-card {
+  background: rgba(15, 23, 42, 0.9);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border);
+  padding: 0.75rem 0.9rem;
+  box-shadow: var(--shadow-soft);
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  transition: transform 0.12s ease, box-shadow 0.12s ease,
+    border-color 0.12s ease;
+}
+
+.media-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--accent);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55);
+}
+
+.media-name {
+  font-weight: 600;
+  font-size: 0.98rem;
+  word-break: break-all;
+}
+
+.media-meta {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.media-type {
+  display: inline-block;
+  padding: 0.15rem 0.4rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  border: 1px solid var(--accent-soft);
+  background: rgba(56, 189, 248, 0.05);
+  color: var(--accent);
+}
+
+.media-path {
+  font-size: 0.75rem;
+  color: var(--muted);
+  word-break: break-all;
+}
+
+/* Empty state */
+
+.empty-state {
+  margin-top: 1.5rem;
+  padding: 1rem;
+  text-align: center;
+  border-radius: var(--radius-lg);
+  border: 1px dashed var(--border);
+  background: rgba(15, 23, 42, 0.85);
+  color: var(--muted);
+}
+
+.hidden {
+  display: none !important;
+}
+
+/* Footer */
+
+.app-footer {
+  padding: 0.75rem 1.25rem;
+  border-top: 1px solid var(--border);
+  text-align: center;
+  font-size: 0.8rem;
+  color: var(--muted);
+  background: #020617;
+}
