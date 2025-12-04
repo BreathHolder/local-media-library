@@ -213,8 +213,8 @@ const FileCard = ({ item, onClick, onEdit, onSetCover }) => {
                         <button
                             onClick={(e) => onSetCover(item, e)}
                             className={`p-1.5 rounded-full shadow-sm ${tags.includes("_cover")
-                                    ? "bg-yellow-400 text-white"
-                                    : "bg-white/90 text-gray-600 hover:text-yellow-500 hover:bg-white"
+                                ? "bg-yellow-400 text-white"
+                                : "bg-white/90 text-gray-600 hover:text-yellow-500 hover:bg-white"
                                 }`}
                             title="Set as Folder Cover"
                         >
@@ -297,8 +297,9 @@ const App = () => {
 
     const [editForm, setEditForm] = useState({
         id: null,
-        custom_title: "",
-        tags: "",
+        custom_title: '',
+        tags: '',
+        category: '',
     });
 
     const [renameForm, setRenameForm] = useState({
@@ -562,8 +563,9 @@ const App = () => {
         if (e) e.stopPropagation();
         setEditForm({
             id: item.id,
-            custom_title: item.custom_title || "",
-            tags: (item.tags || []).filter((t) => t !== "_cover").join(", "),
+            custom_title: item.custom_title || '',
+            tags: (item.tags || []).filter(t => t !== '_cover').join(', '),
+            category: item.category || '',
         });
         setIsEditOpen(true);
     };
@@ -924,32 +926,30 @@ const App = () => {
                             <form onSubmit={handleEditSubmit}>
                                 <div className="space-y-4">
                                     <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                                            Title
-                                        </label>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Title</label>
                                         <input
                                             type="text"
                                             className="w-full border p-2 rounded"
                                             value={editForm.custom_title}
-                                            onChange={(e) =>
-                                                setEditForm({
-                                                    ...editForm,
-                                                    custom_title: e.target.value,
-                                                })
-                                            }
+                                            onChange={(e) => setEditForm(prev => ({ ...prev, custom_title: e.target.value }))}
                                         />
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                                            Tags
-                                        </label>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
+                                        <input
+                                            type="text"
+                                            className="w-full border p-2 rounded"
+                                            value={editForm.category}
+                                            onChange={(e) => setEditForm(prev => ({ ...prev, category: e.target.value }))}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Tags</label>
                                         <input
                                             type="text"
                                             className="w-full border p-2 rounded"
                                             value={editForm.tags}
-                                            onChange={(e) =>
-                                                setEditForm({ ...editForm, tags: e.target.value })
-                                            }
+                                            onChange={(e) => setEditForm(prev => ({ ...prev, tags: e.target.value }))}
                                         />
                                     </div>
                                 </div>
