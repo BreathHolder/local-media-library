@@ -1,0 +1,28 @@
+{
+    "server": {
+        "host": "127.0.0.1",
+        "port": 5000,
+        "debug": true
+    },
+    "paths": {
+        "media_folder": "/path/to/your/media/folder",
+        "db_folder": "assets/db"
+    },
+    "supported_formats": {
+        "images": [".jpg", ".jpeg", ".png", ".gif", ".webp"],
+        "videos": [".mp4", ".mov", ".avi", ".webm", ".mkv"]
+    },
+    "upload": {
+        "max_file_size_mb": 500
+    },
+    "branding": {
+        "site_name": "MediaServer",
+        "site_name_accent": "Local",
+        "footer_message": "Your custom footer text here",
+        "font_family": "system-ui, -apple-system, sans-serif",
+        "heading_font_family": ""
+    },
+    "appearance": {
+        "default_theme": "system"
+    }
+}

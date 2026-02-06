@@ -1,4 +1,4 @@
-const { useState, useEffect, useMemo } = React;
+const { useState, useEffect, useMemo, useCallback } = React;
 
 // --- Mock Data ---
 const MOCK_DATA = [
@@ -6,7 +6,7 @@ const MOCK_DATA = [
         id: 1,
         type: "image",
         path: "/media_content/breathholder/2024/camera.jpg",
-        creator: "breathholder",
+        title: "breathholder",
         category: "Photography",
         tags: ["camera", "_cover"],
         original_name: "camera.jpg",
@@ -17,7 +17,7 @@ const MOCK_DATA = [
         id: 2,
         type: "image",
         path: "/media_content/dumdum/group.jpg",
-        creator: "dumdum",
+        title: "dumdum",
         category: "Screenshots",
         tags: ["friends"],
         original_name: "game.jpg",
@@ -29,6 +29,7 @@ const MOCK_DATA = [
 // --- Icon Component (Lucide via data-lucide) ---
 const ICON_MAP = {
     'library': '📚',
+    'chevron-left': '‹',
     'chevron-right': '›',
     'folder': '📁',
     'folder-open': '📂',
@@ -46,6 +47,11 @@ const ICON_MAP = {
     'upload-cloud': '☁️↑',
     'search': '🔍',
     'hard-drive': '💾',
+    'sun': '☀️',
+    'moon': '🌙',
+    'check': '✓',
+    'select': '☑️',
+    'tag': '🏷️',
 };
 
 const Icon = ({ name, className = "" }) => (
@@ -54,6 +60,17 @@ const Icon = ({ name, className = "" }) => (
     </span>
 );
 
+const readUiState = () => {
+    try {
+        const raw = localStorage.getItem("ui_state");
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        if (!parsed || typeof parsed !== "object") return null;
+        return parsed;
+    } catch (err) {
+        return null;
+    }
+};
 
 const Toast = ({ message, type, onClose }) => {
     useEffect(() => {
@@ -82,10 +99,10 @@ const Toast = ({ message, type, onClose }) => {
 
 const Breadcrumbs = ({ path, onNavigate }) => {
     return (
-        <div className="flex items-center gap-2 text-lg font-medium text-gray-600 overflow-x-auto whitespace-nowrap pb-2">
+        <div className="flex items-center gap-2 text-lg font-medium text-gray-600 dark:text-gray-400 overflow-x-auto whitespace-nowrap pb-2">
             <button
                 onClick={() => onNavigate([])}
-                className={`flex items-center gap-1 hover:text-blue-600 ${path.length === 0 ? "text-gray-900 font-bold" : ""
+                className={`flex items-center gap-1 hover:text-blue-600 dark:hover:text-blue-400 ${path.length === 0 ? "text-gray-900 dark:text-white font-bold" : ""
                     }`}
             >
                 <Icon name="library" className="w-5 h-5" />
@@ -95,11 +112,11 @@ const Breadcrumbs = ({ path, onNavigate }) => {
                 <React.Fragment key={index}>
                     <Icon
                         name="chevron-right"
-                        className="w-4 h-4 text-gray-400 flex-shrink-0"
+                        className="w-4 h-4 text-gray-400 dark:text-gray-500 flex-shrink-0"
                     />
                     <button
                         onClick={() => onNavigate(path.slice(0, index + 1))}
-                        className={`hover:text-blue-600 ${index === path.length - 1 ? "text-gray-900 font-bold" : ""
+                        className={`hover:text-blue-600 dark:hover:text-blue-400 ${index === path.length - 1 ? "text-gray-900 dark:text-white font-bold" : ""
                             }`}
                     >
                         {segment}
@@ -110,7 +127,7 @@ const Breadcrumbs = ({ path, onNavigate }) => {
     );
 };
 
-const FolderCard = ({ name, items, onClick, onRename }) => {
+const FolderCard = ({ name, items, onClick }) => {
     const coverItem =
         items.find((i) => i.hidden && (i.tags || []).includes("_cover")) ||
         items.find((i) => (i.tags || []).includes("_cover")) ||
@@ -122,9 +139,9 @@ const FolderCard = ({ name, items, onClick, onRename }) => {
     return (
         <div
             onClick={onClick}
-            className="group bg-white rounded-xl shadow-sm hover:shadow-lg hover:-translate-y-1 transition-all duration-300 overflow-hidden border border-gray-200 cursor-pointer flex flex-col h-full relative"
+            className="group bg-white dark:bg-gray-800 rounded-xl shadow-sm hover:shadow-lg hover:-translate-y-1 transition-all duration-300 overflow-hidden border border-gray-200 dark:border-gray-700 cursor-pointer flex flex-col h-full relative"
         >
-            <div className="aspect-[4/3] bg-gray-100 relative overflow-hidden">
+            <div className="aspect-[4/3] bg-gray-100 dark:bg-gray-700 relative overflow-hidden">
                 {coverItem ? (
                     coverItem.type === "image" ? (
                         <img
@@ -138,36 +155,19 @@ const FolderCard = ({ name, items, onClick, onRename }) => {
                         </div>
                     )
                 ) : (
-                    <div className="w-full h-full flex items-center justify-center bg-gray-50 text-gray-300">
+                    <div className="w-full h-full flex items-center justify-center bg-gray-50 dark:bg-gray-700 text-gray-300 dark:text-gray-500">
                         <Icon name="folder" className="w-16 h-16" />
                     </div>
                 )}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-60"></div>
-
-                <div className="absolute center top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-white/20 group-hover:text-white/40 transition-colors">
-                    <Icon name="folder" className="w-16 h-16" />
-                </div>
-
-                {onRename && (
-                    <button
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            onRename(name);
-                        }}
-                        className="absolute top-2 right-2 p-1.5 bg-white/90 rounded-full shadow-sm hover:bg-blue-50 text-gray-600 hover:text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity z-20"
-                        title="Rename Collection"
-                    >
-                        <Icon name="pencil" className="w-4 h-4" />
-                    </button>
-                )}
             </div>
             <div className="p-5">
-                <h3 className="font-bold text-lg text-gray-900 truncate mb-1">
+                <h3 className="font-bold text-lg text-gray-900 dark:text-white truncate mb-1">
                     {name}
                 </h3>
-                <div className="flex items-center justify-between text-sm text-gray-500">
+                <div className="flex items-center justify-between text-sm text-gray-500 dark:text-gray-400">
                     <span>{visibleCount} items</span>
-                    <div className="flex items-center gap-1 text-blue-600">
+                    <div className="flex items-center gap-1 text-blue-600 dark:text-blue-400">
                         <span>Open</span>
                         <Icon name="arrow-right" className="w-4 h-4" />
                     </div>
@@ -177,15 +177,27 @@ const FolderCard = ({ name, items, onClick, onRename }) => {
     );
 };
 
-const FileCard = ({ item, onClick, onEdit, onSetCover }) => {
+const FileCard = ({ item, onClick, onEdit, onSetCover, selectionMode, isSelected, onToggleSelect }) => {
     const tags = item.tags || [];
+
+    const handleClick = () => {
+        if (selectionMode) {
+            onToggleSelect(item.id);
+        } else {
+            onClick();
+        }
+    };
 
     return (
         <div
-            onClick={onClick}
-            className="group bg-white rounded-xl shadow-sm hover:shadow-md transition-all duration-200 overflow-hidden border border-gray-100 flex flex-col relative cursor-pointer"
+            onClick={handleClick}
+            className={`group bg-white dark:bg-gray-800 rounded-xl shadow-sm hover:shadow-md transition-all duration-200 overflow-hidden border flex flex-col relative cursor-pointer ${
+                isSelected
+                    ? "border-blue-500 ring-2 ring-blue-500"
+                    : "border-gray-100 dark:border-gray-700"
+            }`}
         >
-            <div className="aspect-square bg-gray-100 relative overflow-hidden">
+            <div className="aspect-square bg-gray-100 dark:bg-gray-700 relative overflow-hidden">
                 {item.type === "video" ? (
                     <div className="w-full h-full relative">
                         <video
@@ -208,41 +220,55 @@ const FileCard = ({ item, onClick, onEdit, onSetCover }) => {
                     />
                 )}
 
-                <div className="absolute top-2 right-2 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity z-10">
-                    {item.type === "image" && (
-                        <button
-                            onClick={(e) => onSetCover(item, e)}
-                            className={`p-1.5 rounded-full shadow-sm ${tags.includes("_cover")
-                                ? "bg-yellow-400 text-white"
-                                : "bg-white/90 text-gray-600 hover:text-yellow-500 hover:bg-white"
-                                }`}
-                            title="Set as Folder Cover"
-                        >
-                            <Icon
-                                name="star"
-                                className={`w-4 h-4 ${tags.includes("_cover") ? "fill-current" : ""
+                {!selectionMode && (
+                    <div className="absolute top-2 right-2 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                        {item.type === "image" && (
+                            <button
+                                onClick={(e) => onSetCover(item, e)}
+                                className={`p-1.5 rounded-full shadow-sm ${tags.includes("_cover")
+                                    ? "bg-yellow-400 text-white"
+                                    : "bg-white/90 dark:bg-gray-800/90 text-gray-600 dark:text-gray-300 hover:text-yellow-500 hover:bg-white dark:hover:bg-gray-700"
                                     }`}
-                            />
+                                title="Set as Folder Cover"
+                            >
+                                <Icon
+                                    name="star"
+                                    className={`w-4 h-4 ${tags.includes("_cover") ? "fill-current" : ""
+                                        }`}
+                                />
+                            </button>
+                        )}
+                        <button
+                            onClick={(e) => onEdit(item, e)}
+                            className="p-1.5 bg-white/90 dark:bg-gray-800/90 rounded-full shadow-sm hover:bg-blue-50 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 hover:text-blue-600"
+                            title="Edit Details"
+                        >
+                            <Icon name="edit-2" className="w-4 h-4" />
                         </button>
-                    )}
-                    <button
-                        onClick={(e) => onEdit(item, e)}
-                        className="p-1.5 bg-white/90 rounded-full shadow-sm hover:bg-blue-50 text-gray-600 hover:text-blue-600"
-                        title="Edit Details"
-                    >
-                        <Icon name="edit-2" className="w-4 h-4" />
-                    </button>
-                </div>
+                    </div>
+                )}
 
-                {tags.includes("_cover") && (
+                {tags.includes("_cover") && !selectionMode && (
                     <div className="absolute top-2 left-2 bg-yellow-400 text-white text-[10px] font-bold px-2 py-0.5 rounded shadow-sm z-10">
                         COVER
+                    </div>
+                )}
+
+                {selectionMode && (
+                    <div
+                        className={`absolute top-2 left-2 w-6 h-6 rounded-full border-2 flex items-center justify-center z-10 transition-colors ${
+                            isSelected
+                                ? "bg-blue-500 border-blue-500 text-white"
+                                : "bg-white/90 dark:bg-gray-800/90 border-gray-300 dark:border-gray-600"
+                        }`}
+                    >
+                        {isSelected && <Icon name="check" className="text-sm" />}
                     </div>
                 )}
             </div>
             <div className="p-4 flex-1 flex flex-col">
                 <h3
-                    className="font-medium text-gray-900 truncate mb-1"
+                    className="font-medium text-gray-900 dark:text-white truncate mb-1"
                     title={item.custom_title || item.original_name}
                 >
                     {item.custom_title || item.original_name}
@@ -254,7 +280,7 @@ const FileCard = ({ item, onClick, onEdit, onSetCover }) => {
                         .map((tag, idx) => (
                             <span
                                 key={idx}
-                                className="bg-gray-100 text-gray-600 text-xs px-2 py-0.5 rounded-full border border-gray-200"
+                                className="bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 text-xs px-2 py-0.5 rounded-full border border-gray-200 dark:border-gray-600"
                             >
                                 #{tag}
                             </span>
@@ -266,22 +292,36 @@ const FileCard = ({ item, onClick, onEdit, onSetCover }) => {
 };
 
 const App = () => {
+    const initialUiState = readUiState();
     const [media, setMedia] = useState([]);
     const [loading, setLoading] = useState(true);
     const [serverActive, setServerActive] = useState(false);
+    const [branding, setBranding] = useState({
+        site_name: "MediaServer",
+        site_name_accent: "Local",
+        footer_message: "",
+        font_family: "system-ui, -apple-system, sans-serif",
+        heading_font_family: ""
+    });
+    const [darkMode, setDarkMode] = useState(false);
+    const [defaultTheme, setDefaultTheme] = useState("system");
 
-    const [currentPath, setCurrentPath] = useState([]);
+    const [currentPath, setCurrentPath] = useState(initialUiState?.currentPath || []);
 
-    const [searchInput, setSearchInput] = useState("");
-    const [searchQuery, setSearchQuery] = useState("");
-    const [selectedCategory, setSelectedCategory] = useState("All");
+    const [searchInput, setSearchInput] = useState(initialUiState?.searchInput || "");
+    const [searchQuery, setSearchQuery] = useState(initialUiState?.searchQuery || "");
+    const [viewMode, setViewMode] = useState(initialUiState?.viewMode || "title"); // "title" or "category"
 
-    const [visibleCount, setVisibleCount] = useState(48);
+    const [visibleCount, setVisibleCount] = useState(initialUiState?.visibleCount || 48);
 
     const [isUploadOpen, setIsUploadOpen] = useState(false);
     const [isEditOpen, setIsEditOpen] = useState(false);
-    const [isRenameOpen, setIsRenameOpen] = useState(false);
+    const [isBulkEditOpen, setIsBulkEditOpen] = useState(false);
     const [viewMedia, setViewMedia] = useState(null);
+    const [hasRestoredState, setHasRestoredState] = useState(false);
+
+    const [selectionMode, setSelectionMode] = useState(false);
+    const [selectedItems, setSelectedItems] = useState(new Set());
 
     const [scanning, setScanning] = useState(false);
     const [processing, setProcessing] = useState(false);
@@ -289,7 +329,7 @@ const App = () => {
 
     const [uploadForm, setUploadForm] = useState({
         file: null,
-        creator: "breathholder",
+        title: "",
         category: "General",
         tags: "",
         is_hidden: false,
@@ -298,13 +338,15 @@ const App = () => {
     const [editForm, setEditForm] = useState({
         id: null,
         custom_title: '',
+        title: '',
         tags: '',
         category: '',
     });
 
-    const [renameForm, setRenameForm] = useState({
-        oldName: "",
-        newName: "",
+    const [bulkEditForm, setBulkEditForm] = useState({
+        tags: "",
+        category: "",
+        tagMode: "add", // "add" or "replace"
     });
 
     // Initialize Lucide icons after each render where UI might change
@@ -316,6 +358,50 @@ const App = () => {
 
     const showToast = (message, type = "success") => {
         setToast({ message, type });
+    };
+
+    const fetchConfig = async () => {
+        try {
+            const res = await fetch("/api/config");
+            if (res.ok) {
+                const data = await res.json();
+                if (data.branding) {
+                    setBranding(prev => ({ ...prev, ...data.branding }));
+                }
+                if (data.appearance?.default_theme) {
+                    setDefaultTheme(data.appearance.default_theme);
+                }
+            }
+        } catch (err) {
+            console.log("Could not fetch config, using defaults");
+        }
+    };
+
+    // Initialize theme
+    useEffect(() => {
+        const savedTheme = localStorage.getItem('theme');
+        if (savedTheme) {
+            setDarkMode(savedTheme === 'dark');
+        } else if (defaultTheme === 'system') {
+            setDarkMode(window.matchMedia('(prefers-color-scheme: dark)').matches);
+        } else {
+            setDarkMode(defaultTheme === 'dark');
+        }
+    }, [defaultTheme]);
+
+    // Apply dark mode class to document
+    useEffect(() => {
+        if (darkMode) {
+            document.documentElement.classList.add('dark');
+        } else {
+            document.documentElement.classList.remove('dark');
+        }
+    }, [darkMode]);
+
+    const toggleDarkMode = () => {
+        const newMode = !darkMode;
+        setDarkMode(newMode);
+        localStorage.setItem('theme', newMode ? 'dark' : 'light');
     };
 
     const fetchMedia = async () => {
@@ -335,11 +421,14 @@ const App = () => {
     };
 
     useEffect(() => {
+        fetchConfig();
         fetchMedia();
     }, []);
 
-    const categories = ["All", ...new Set(media.map((m) => m.category))];
-    const creators = ["All", ...new Set(media.map((m) => m.creator))]; // not used yet but kept for future
+    const categories = [...new Set(media.map((m) => m.category))].filter(Boolean).sort();
+    const titles = [...new Set(media.map((m) => m.title))].filter(Boolean).sort();
+
+    const getFileSortKey = (item) => (item.original_name || item.filename || "").toLowerCase();
 
     const viewContent = useMemo(() => {
         if (searchQuery) {
@@ -350,55 +439,52 @@ const App = () => {
                 const matchesText =
                     displayTitle.toLowerCase().includes(q) ||
                     (item.tags || []).some((t) => t.toLowerCase().includes(q)) ||
-                    (item.creator || "").toLowerCase().includes(q);
-                const matchesCategory =
-                    selectedCategory === "All" || item.category === selectedCategory;
-                return matchesText && matchesCategory;
+                    (item.title || "").toLowerCase().includes(q) ||
+                    (item.category || "").toLowerCase().includes(q);
+                return matchesText;
             });
-            return { mode: "search", folders: [], files: items };
+            const sortedItems = [...items].sort((a, b) =>
+                getFileSortKey(a).localeCompare(getFileSortKey(b), undefined, { numeric: true })
+            );
+            return { mode: "search", folders: [], files: sortedItems };
         }
 
-        const currentFolders = {};
-        const currentFiles = [];
+        // Determine grouping field based on view mode
+        const groupField = viewMode === "category" ? "category" : "title";
 
-        media.forEach((item) => {
-            if (selectedCategory !== "All" && item.category !== selectedCategory)
-                return;
-            if (!item.path) return;
-
-            const pathParts = item.path.split("/").slice(2); // skip leading /media_content
-            if (pathParts.length <= currentPath.length) return;
-
-            let match = true;
-            for (let i = 0; i < currentPath.length; i++) {
-                if (pathParts[i] !== currentPath[i]) {
-                    match = false;
-                    break;
+        // At root level (no currentPath), show folders grouped by the selected field
+        if (currentPath.length === 0) {
+            const groups = {};
+            media.forEach((item) => {
+                const groupName = item[groupField] || "Uncategorized";
+                if (!groups[groupName]) {
+                    groups[groupName] = { name: groupName, items: [] };
                 }
-            }
-            if (!match) return;
+                groups[groupName].items.push(item);
+            });
 
-            const remainingParts = pathParts.slice(currentPath.length);
+            return {
+                mode: "browse",
+                folders: Object.values(groups).sort((a, b) => a.name.localeCompare(b.name)),
+                files: [],
+            };
+        }
 
-            if (remainingParts.length === 1) {
-                if (!item.hidden) {
-                    currentFiles.push(item);
-                }
-            } else {
-                const folderName = remainingParts[0];
-                if (!currentFolders[folderName]) {
-                    currentFolders[folderName] = { name: folderName, items: [] };
-                }
-                currentFolders[folderName].items.push(item);
-            }
+        // Inside a folder - show items that match the selected group
+        const selectedGroup = currentPath[0];
+        const currentFiles = media.filter((item) => {
+            if (item.hidden) return false;
+            return item[groupField] === selectedGroup;
         });
 
         return {
             mode: "browse",
-            folders: Object.values(currentFolders),
-            files: currentFiles,
+            folders: [],
+            files: currentFiles.sort((a, b) =>
+                getFileSortKey(a).localeCompare(getFileSortKey(b), undefined, { numeric: true })
+            ),
         };
-    }, [media, currentPath, searchQuery, selectedCategory]);
+    }, [media, currentPath, searchQuery, viewMode]);
 
     const visibleFiles = useMemo(() => {
         return viewContent.files.slice(0, visibleCount);
@@ -451,7 +537,7 @@ const App = () => {
         if (!serverActive) return showToast("Server offline", "error");
         setProcessing(true);
         const oldCover = media.find(
-            (m) => m.creator === item.creator && (m.tags || []).includes("_cover")
+            (m) => m.title === item.title && (m.tags || []).includes("_cover")
         );
 
         try {
@@ -482,44 +568,6 @@ const App = () => {
         }
     };
 
-    const openRenameModal = (name) => {
-        setRenameForm({ oldName: name, newName: name });
-        setIsRenameOpen(true);
-    };
-
-    const handleRenameSubmit = async (e) => {
-        e.preventDefault();
-        setProcessing(true);
-        const { oldName, newName } = renameForm;
-        if (!newName || newName === oldName) {
-            setProcessing(false);
-            setIsRenameOpen(false);
-            return;
-        }
-        const itemsToUpdate = media.filter((item) => item.creator === oldName);
-        const updates = itemsToUpdate.map((item) => ({
-            id: item.id,
-            creator: newName,
-        }));
-
-        try {
-            const res = await fetch("/api/batch_update", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ updates }),
-            });
-            if (res.ok) {
-                showToast(`Renamed collection to "${newName}"`);
-                setIsRenameOpen(false);
-                fetchMedia();
-            } else throw new Error();
-        } catch (err) {
-            showToast("Error renaming collection", "error");
-        } finally {
-            setProcessing(false);
-        }
-    };
-
     const handleUploadChange = (e) => {
         const { name, value, files, type, checked } = e.target;
         setUploadForm((prev) => ({
@@ -533,7 +581,7 @@ const App = () => {
         setProcessing(true);
         const formData = new FormData();
         formData.append("file", uploadForm.file);
-        formData.append("creator", uploadForm.creator);
+        formData.append("title", uploadForm.title);
         formData.append("category", uploadForm.category);
         formData.append("tags", uploadForm.tags);
         formData.append("is_hidden", uploadForm.is_hidden);
@@ -544,7 +592,7 @@ const App = () => {
                 setIsUploadOpen(false);
                 setUploadForm({
                     file: null,
-                    creator: "breathholder",
+                    title: "",
                     category: "General",
                     tags: "",
                     is_hidden: false,
@@ -559,15 +607,116 @@ const App = () => {
         }
     };
 
+    const buildEditForm = (item) => ({
+        id: item.id,
+        custom_title: item.custom_title || '',
+        title: item.title || '',
+        tags: (item.tags || []).filter(t => t !== '_cover').join(', '),
+        category: item.category || '',
+    });
+
     const openEditModal = (item, e) => {
         if (e) e.stopPropagation();
-        setEditForm({
-            id: item.id,
-            custom_title: item.custom_title || '',
-            tags: (item.tags || []).filter(t => t !== '_cover').join(', '),
-            category: item.category || '',
-        });
+        setEditForm(buildEditForm(item));
         setIsEditOpen(true);
+    };
+
+    const openViewMedia = (item) => {
+        setViewMedia(item);
+        setEditForm(buildEditForm(item));
+    };
+
+    const toggleSelectionMode = () => {
+        setSelectionMode(!selectionMode);
+        setSelectedItems(new Set());
+    };
+
+    const toggleItemSelection = (itemId, e) => {
+        if (e) e.stopPropagation();
+        setSelectedItems(prev => {
+            const newSet = new Set(prev);
+            if (newSet.has(itemId)) {
+                newSet.delete(itemId);
+            } else {
+                newSet.add(itemId);
+            }
+            return newSet;
+        });
+    };
+
+    const selectAllVisible = () => {
+        const allIds = visibleFiles.map(item => item.id);
+        setSelectedItems(new Set(allIds));
+    };
+
+    const clearSelection = () => {
+        setSelectedItems(new Set());
+    };
+
+    const openBulkEditModal = () => {
+        setBulkEditForm({ tags: "", category: "", tagMode: "add" });
+        setIsBulkEditOpen(true);
+    };
+
+    const handleBulkEditSubmit = async (e) => {
+        e.preventDefault();
+        if (selectedItems.size === 0) return;
+
+        setProcessing(true);
+        const updates = [];
+
+        for (const itemId of selectedItems) {
+            const item = media.find(m => m.id === itemId);
+            if (!item) continue;
+
+            const update = { id: itemId };
+
+            // Handle category
+            if (bulkEditForm.category.trim()) {
+                update.category = bulkEditForm.category.trim();
+            }
+
+            // Handle tags
+            if (bulkEditForm.tags.trim()) {
+                const newTags = bulkEditForm.tags.split(",").map(t => t.trim()).filter(Boolean);
+                const existingTags = item.tags || [];
+                const hasCover = existingTags.includes("_cover");
+
+                if (bulkEditForm.tagMode === "replace") {
+                    update.tags = hasCover ? [...newTags, "_cover"] : newTags;
+                } else {
+                    // Add mode - merge tags
+                    const mergedTags = [...new Set([...existingTags.filter(t => t !== "_cover"), ...newTags])];
+                    if (hasCover) mergedTags.push("_cover");
+                    update.tags = mergedTags;
+                }
+            }
+
+            if (Object.keys(update).length > 1) {
+                updates.push(update);
+            }
+        }
+
+        try {
+            const res = await fetch("/api/batch_update", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ updates }),
+            });
+            if (res.ok) {
+                showToast(`Updated ${updates.length} items`);
+                setIsBulkEditOpen(false);
+                setSelectedItems(new Set());
+                setSelectionMode(false);
+                fetchMedia();
+            } else {
+                throw new Error();
+            }
+        } catch (err) {
+            showToast("Error updating items", "error");
+        } finally {
+            setProcessing(false);
+        }
     };
 
     const handleEditSubmit = async (e) => {
@@ -599,8 +748,157 @@ const App = () => {
         }
     };
 
+    const handleLightboxSave = async (e) => {
+        e.preventDefault();
+        if (!viewMedia) return;
+        setProcessing(true);
+        const originalItem = media.find((m) => m.id === editForm.id);
+        const isCover = (originalItem?.tags || []).includes("_cover");
+        let tagList = editForm.tags
+            .split(",")
+            .map((t) => t.trim())
+            .filter(Boolean);
+        if (isCover) tagList.push("_cover");
+
+        try {
+            const res = await fetch(`/api/update/${editForm.id}`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    id: editForm.id,
+                    custom_title: editForm.custom_title,
+                    title: editForm.title,
+                    category: editForm.category,
+                    tags: tagList,
+                }),
+            });
+            if (res.ok) {
+                showToast("Details updated");
+                fetchMedia();
+                setViewMedia((prev) =>
+                    prev
+                        ? { ...prev, custom_title: editForm.custom_title, tags: tagList }
+                        : prev
+                );
+            } else showToast("Update failed", "error");
+        } catch (error) {
+            showToast("Error updating", "error");
+        } finally {
+            setProcessing(false);
+        }
+    };
+
+    const lightboxItems = useMemo(() => visibleFiles, [visibleFiles]);
+    const lightboxIndex = useMemo(() => {
+        if (!viewMedia) return -1;
+        return lightboxItems.findIndex((item) => item.id === viewMedia.id);
+    }, [lightboxItems, viewMedia]);
+
+    const goToLightboxIndex = (nextIndex) => {
+        if (nextIndex < 0 || nextIndex >= lightboxItems.length) return;
+        const nextItem = lightboxItems[nextIndex];
+        if (!nextItem) return;
+        openViewMedia(nextItem);
+    };
+
+    const handleLightboxPrev = (e) => {
+        if (e) e.stopPropagation();
+        if (lightboxIndex <= 0) return;
+        goToLightboxIndex(lightboxIndex - 1);
+    };
+
+    const handleLightboxNext = (e) => {
+        if (e) e.stopPropagation();
+        if (lightboxIndex === -1 || lightboxIndex >= lightboxItems.length - 1) return;
+        goToLightboxIndex(lightboxIndex + 1);
+    };
+
+    useEffect(() => {
+        if (!viewMedia) return;
+        const handleKeyDown = (e) => {
+            const target = e.target;
+            const isFormField =
+                target &&
+                (target.tagName === "INPUT" ||
+                    target.tagName === "TEXTAREA" ||
+                    target.isContentEditable);
+            if (isFormField) return;
+            if (e.key === "ArrowLeft") {
+                e.preventDefault();
+                handleLightboxPrev();
+            }
+            if (e.key === "ArrowRight") {
+                e.preventDefault();
+                handleLightboxNext();
+            }
+            if (e.key === "Escape") {
+                e.preventDefault();
+                setViewMedia(null);
+            }
+        };
+        window.addEventListener("keydown", handleKeyDown);
+        return () => window.removeEventListener("keydown", handleKeyDown);
+    }, [viewMedia, lightboxIndex, lightboxItems.length]);
+
+    const saveUiState = useCallback(
+        (overrides = {}) => {
+            const payload = {
+                currentPath,
+                searchInput,
+                searchQuery,
+                viewMode,
+                visibleCount,
+                viewMediaId: viewMedia?.id || null,
+                scrollY: window.scrollY,
+                ...overrides,
+            };
+            try {
+                localStorage.setItem("ui_state", JSON.stringify(payload));
+            } catch (err) {
+                // ignore write errors (private mode, storage full, etc)
+            }
+        },
+        [currentPath, searchInput, searchQuery, viewMode, visibleCount, viewMedia]
+    );
+
+    useEffect(() => {
+        saveUiState();
+    }, [saveUiState]);
+
+    useEffect(() => {
+        const handleScroll = () => saveUiState();
+        const handleBeforeUnload = () => saveUiState();
+        window.addEventListener("scroll", handleScroll, { passive: true });
+        window.addEventListener("beforeunload", handleBeforeUnload);
+        return () => {
+            window.removeEventListener("scroll", handleScroll);
+            window.removeEventListener("beforeunload", handleBeforeUnload);
+        };
+    }, [saveUiState]);
+
+    useEffect(() => {
+        if (loading || hasRestoredState) return;
+        const saved = initialUiState;
+        if (saved?.scrollY != null) {
+            window.scrollTo(0, saved.scrollY);
+        }
+        if (saved?.viewMediaId) {
+            const match = media.find((item) => item.id === saved.viewMediaId);
+            if (match) openViewMedia(match);
+        }
+        setHasRestoredState(true);
+    }, [loading, hasRestoredState, media]);
+
+    // Build custom font style
+    const fontStyle = {
+        fontFamily: branding.font_family || "system-ui, -apple-system, sans-serif"
+    };
+    const headingFontStyle = branding.heading_font_family
+        ? { fontFamily: branding.heading_font_family }
+        : fontStyle;
+
     return (
-        <div className="min-h-screen flex flex-col relative pb-20">
+        <div className="min-h-screen flex flex-col relative pb-20 bg-gray-100 dark:bg-gray-900 transition-colors" style={fontStyle}>
             {toast && (
                 <Toast
                     message={toast.message}
@@ -631,6 +929,22 @@ const App = () => {
                     <button className="absolute top-4 right-4 text-white/70 hover:text-white p-2 z-50">
                         <Icon name="x" className="w-8 h-8" />
                     </button>
+                    <button
+                        className={`absolute left-4 md:left-8 top-1/2 -translate-y-1/2 z-50 p-[30px] rounded-full bg-black/40 text-white hover:bg-black/60 transition-colors ${lightboxIndex <= 0 ? "opacity-40 cursor-not-allowed" : ""}`}
+                        onClick={handleLightboxPrev}
+                        disabled={lightboxIndex <= 0}
+                        title="Previous"
+                    >
+                        <Icon name="chevron-left" className="text-[80px] leading-none" />
+                    </button>
+                    <button
+                        className={`absolute right-4 md:right-8 top-1/2 -translate-y-1/2 z-50 p-[30px] rounded-full bg-black/40 text-white hover:bg-black/60 transition-colors ${lightboxIndex === -1 || lightboxIndex >= lightboxItems.length - 1 ? "opacity-40 cursor-not-allowed" : ""}`}
+                        onClick={handleLightboxNext}
+                        disabled={lightboxIndex === -1 || lightboxIndex >= lightboxItems.length - 1}
+                        title="Next"
+                    >
+                        <Icon name="chevron-right" className="text-[80px] leading-none" />
+                    </button>
                     <div
                         className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-8 text-white z-40"
                         onClick={(e) => e.stopPropagation()}
@@ -640,11 +954,10 @@ const App = () => {
                         </h2>
                         <div className="flex items-center gap-4 mt-2 text-white/80">
                             <span className="flex items-center gap-1">
-                                <Icon name="user" className="w-4 h-4" /> {viewMedia.creator}
+                                <Icon name="library" className="w-4 h-4" /> {viewMedia.title}
                             </span>
                             <span className="flex items-center gap-1">
-                                <Icon name="folder" className="w-4 h-4" />{" "}
-                                {viewMedia.category}
+                                <Icon name="folder" className="w-4 h-4" /> {viewMedia.category}
                             </span>
                             {(viewMedia.tags || []).length > 0 && (
                                 <div className="flex gap-2">
@@ -661,16 +974,62 @@ const App = () => {
                                 </div>
                             )}
                         </div>
+                        <form
+                            onSubmit={handleLightboxSave}
+                            className="mt-4 bg-white/10 backdrop-blur-md border border-white/20 rounded-lg p-4 max-w-3xl"
+                        >
+                            <div className="flex flex-col md:flex-row gap-3">
+                                <div className="flex-1">
+                                    <label className="block text-xs uppercase tracking-wide text-white/70 mb-1">
+                                        Display Name
+                                    </label>
+                                    <input
+                                        type="text"
+                                        placeholder="Custom display name (optional)"
+                                        className="w-full border border-white/20 bg-white/10 text-white placeholder-white/50 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                                        value={editForm.custom_title}
+                                        onChange={(e) =>
+                                            setEditForm((prev) => ({ ...prev, custom_title: e.target.value }))
+                                        }
+                                    />
+                                </div>
+                                <div className="flex-1">
+                                    <label className="block text-xs uppercase tracking-wide text-white/70 mb-1">
+                                        Tags
+                                    </label>
+                                    <input
+                                        type="text"
+                                        placeholder="tag1, tag2, tag3"
+                                        className="w-full border border-white/20 bg-white/10 text-white placeholder-white/50 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                                        value={editForm.tags}
+                                        onChange={(e) =>
+                                            setEditForm((prev) => ({ ...prev, tags: e.target.value }))
+                                        }
+                                    />
+                                </div>
+                                <div className="flex items-end">
+                                    <button
+                                        type="submit"
+                                        disabled={processing}
+                                        className={`px-4 py-2 rounded-md bg-blue-600 text-white hover:bg-blue-700 transition-colors ${processing ? "opacity-60 cursor-not-allowed" : ""
+                                            }`}
+                                    >
+                                        Save
+                                    </button>
+                                </div>
+                            </div>
+                            <p className="text-xs text-white/60 mt-2">
+                                Separate multiple tags with commas
+                            </p>
+                        </form>
                     </div>
-                    <div
-                        className="w-full h-full flex items-center justify-center p-4 lightbox-enter"
-                        onClick={(e) => e.stopPropagation()}
-                    >
+                    <div className="w-full h-full flex items-center justify-center p-4 lightbox-enter">
                         {viewMedia.type === "image" ? (
                             <img
                                 src={viewMedia.path}
                                 alt={viewMedia.original_name}
                                 className="max-h-full max-w-full object-contain rounded shadow-2xl"
+                                onClick={(e) => e.stopPropagation()}
                             />
                         ) : (
                             <video
@@ -679,32 +1038,33 @@ const App = () => {
                                 controls
                                 autoPlay
                                 preload="auto"
+                                onClick={(e) => e.stopPropagation()}
                             />
                         )}
                     </div>
                 </div>
             )}
 
-            <header className="bg-white shadow-sm sticky top-0 z-10">
+            <header className="bg-white dark:bg-gray-800 shadow-sm sticky top-0 z-10 transition-colors">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
                     <div
                         className="flex items-center gap-2 cursor-pointer"
                         onClick={() => navigateUp([])}
                     >
                         <Icon name="hard-drive" className="text-blue-600" />
-                        <h1 className="text-xl font-bold text-gray-900 hidden sm:block">
-                            MediaServer<span className="text-blue-600">Local</span>
+                        <h1 className="text-xl font-bold text-gray-900 dark:text-white hidden sm:block" style={headingFontStyle}>
+                            {branding.site_name}<span className="text-blue-600 dark:text-blue-400">{branding.site_name_accent}</span>
                         </h1>
                     </div>
                     <div className="flex-1 max-w-lg relative flex items-center gap-2">
                         <div className="relative flex-1">
-                            <span className="absolute left-3 top-2.5 text-gray-400">
+                            <span className="absolute left-3 top-2.5 text-gray-400 dark:text-gray-500">
                                 <Icon name="search" className="w-5 h-5" />
                             </span>
                             <input
                                 type="text"
                                 placeholder="Search files..."
-                                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                                className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
                                 value={searchInput}
                                 onChange={(e) => setSearchInput(e.target.value)}
                                 onKeyDown={handleKeyDown}
@@ -720,9 +1080,28 @@ const App = () => {
                     </div>
                     <div className="flex gap-2">
                         <button
+                            onClick={toggleDarkMode}
+                            className="bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 p-2 rounded-lg transition-colors"
+                            title={darkMode ? "Switch to light mode" : "Switch to dark mode"}
+                        >
+                            <Icon name={darkMode ? "sun" : "moon"} className="w-5 h-5" />
+                        </button>
+                        <button
+                            onClick={toggleSelectionMode}
+                            className={`px-3 py-2 rounded-lg flex items-center gap-2 transition-colors ${
+                                selectionMode
+                                    ? "bg-blue-600 text-white"
+                                    : "bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200"
+                            }`}
+                            title="Toggle selection mode"
+                        >
+                            <Icon name="select" className="w-4 h-4" />
+                            <span className="hidden md:inline">{selectionMode ? "Cancel" : "Select"}</span>
+                        </button>
+                        <button
                             onClick={handleScan}
                             disabled={scanning}
-                            className={`bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-2 rounded-lg flex items-center gap-2 transition-colors ${scanning ? "opacity-50 cursor-not-allowed" : ""
+                            className={`bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 px-3 py-2 rounded-lg flex items-center gap-2 transition-colors ${scanning ? "opacity-50 cursor-not-allowed" : ""
                                 }`}
                         >
                             <Icon
@@ -746,8 +1125,8 @@ const App = () => {
 
             <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
                 {!serverActive && (
-                    <div className="mb-6 bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded-r shadow-sm">
-                        <p className="text-sm text-yellow-700">
+                    <div className="mb-6 bg-yellow-50 dark:bg-yellow-900/30 border-l-4 border-yellow-400 p-4 rounded-r shadow-sm">
+                        <p className="text-sm text-yellow-700 dark:text-yellow-300">
                             Preview Mode: Python server not detected.
                         </p>
                     </div>
@@ -762,11 +1141,11 @@ const App = () => {
                                         setSearchQuery("");
                                         setSearchInput("");
                                     }}
-                                    className="text-blue-600 hover:underline flex items-center gap-1"
+                                    className="text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
                                 >
                                     <Icon name="arrow-left" className="w-4 h-4" /> Back
                                 </button>
-                                <h2 className="text-xl font-bold text-gray-800">
+                                <h2 className="text-xl font-bold text-gray-800 dark:text-white">
                                     Search: "{searchQuery}"
                                 </h2>
                             </div>
@@ -774,20 +1153,28 @@ const App = () => {
                             <Breadcrumbs path={currentPath} onNavigate={navigateUp} />
                         )}
                     </div>
-                    <select
-                        className="px-4 py-2 border border-gray-300 rounded-lg bg-white outline-none min-w-[150px]"
-                        value={selectedCategory}
-                        onChange={(e) => setSelectedCategory(e.target.value)}
-                    >
-                        <option value="All">All Categories</option>
-                        {categories
-                            .filter((c) => c !== "All")
-                            .map((c) => (
-                                <option key={c} value={c}>
-                                    {c}
-                                </option>
-                            ))}
-                    </select>
+                    <div className="flex items-center gap-2 bg-gray-100 dark:bg-gray-800 rounded-lg p-1">
+                        <button
+                            onClick={() => { setViewMode("title"); setCurrentPath([]); }}
+                            className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                                viewMode === "title"
+                                    ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm"
+                                    : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+                            }`}
+                        >
+                            By Title
+                        </button>
+                        <button
+                            onClick={() => { setViewMode("category"); setCurrentPath([]); }}
+                            className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                                viewMode === "category"
+                                    ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm"
+                                    : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+                            }`}
+                        >
+                            By Category
+                        </button>
+                    </div>
                 </div>
 
                 {loading ? (
@@ -798,15 +1185,15 @@ const App = () => {
                     <>
                         {viewContent.folders.length === 0 &&
                             viewContent.files.length === 0 && (
-                                <div className="text-center py-20 bg-white rounded-xl border border-dashed border-gray-300">
+                                <div className="text-center py-20 bg-white dark:bg-gray-800 rounded-xl border border-dashed border-gray-300 dark:border-gray-600">
                                     <Icon
                                         name="folder-open"
-                                        className="mx-auto w-12 h-12 text-gray-300 mb-2"
+                                        className="mx-auto w-12 h-12 text-gray-300 dark:text-gray-600 mb-2"
                                     />
-                                    <h3 className="text-sm font-medium text-gray-900">
+                                    <h3 className="text-sm font-medium text-gray-900 dark:text-white">
                                         {searchQuery ? "No matches found" : "Empty Folder"}
                                     </h3>
-                                    <p className="text-gray-500 text-sm mt-1">
+                                    <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">
                                         {searchQuery
                                             ? "Try a different term"
                                             : "No media found in this location"}
@@ -821,16 +1208,18 @@ const App = () => {
                                     name={folder.name}
                                     items={folder.items}
                                     onClick={() => navigateToFolder(folder.name)}
-                                    onRename={currentPath.length === 0 ? openRenameModal : null}
                                 />
                             ))}
                             {visibleFiles.map((item) => (
                                 <FileCard
                                     key={item.id}
                                     item={item}
-                                    onClick={() => setViewMedia(item)}
+                                    onClick={() => openViewMedia(item)}
                                     onEdit={openEditModal}
                                     onSetCover={handleSetCover}
+                                    selectionMode={selectionMode}
+                                    isSelected={selectedItems.has(item.id)}
+                                    onToggleSelect={toggleItemSelection}
                                 />
                             ))}
                         </div>
@@ -839,7 +1228,7 @@ const App = () => {
                             <div className="mt-8 flex justify-center">
                                 <button
                                     onClick={handleLoadMore}
-                                    className="bg-white border border-gray-300 text-gray-700 px-6 py-2 rounded-full hover:bg-gray-50 shadow-sm transition-all"
+                                    className="bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 px-6 py-2 rounded-full hover:bg-gray-50 dark:hover:bg-gray-700 shadow-sm transition-all"
                                 >
                                     Load More (
                                     {viewContent.files.length - visibleFiles.length} remaining)
@@ -850,65 +1239,6 @@ const App = () => {
                 )}
             </main>
 
-            {isRenameOpen && (
-                <div className="fixed inset-0 z-50 overflow-y-auto">
-                    <div className="flex items-center justify-center min-h-screen px-4">
-                        <div
-                            className="fixed inset-0 bg-black/50 transition-opacity"
-                            onClick={() => setIsRenameOpen(false)}
-                        ></div>
-                        <div className="bg-white rounded-lg shadow-xl w-full max-w-md z-10 p-6">
-                            <div className="flex justify-between items-center mb-4">
-                                <h3 className="text-lg font-medium">Rename Collection</h3>
-                                <button onClick={() => setIsRenameOpen(false)}>
-                                    <Icon name="x" className="w-5 h-5 text-gray-400" />
-                                </button>
-                            </div>
-                            <p className="text-sm text-gray-500 mb-4">
-                                This will update the Creator name for all{" "}
-                                {media.filter((i) => i.creator === renameForm.oldName).length}{" "}
-                                items in this group.
-                            </p>
-                            <form onSubmit={handleRenameSubmit}>
-                                <div className="mb-4">
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        New Name
-                                    </label>
-                                    <input
-                                        type="text"
-                                        className="w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 px-3 py-2 border"
-                                        value={renameForm.newName}
-                                        onChange={(e) =>
-                                            setRenameForm({
-                                                ...renameForm,
-                                                newName: e.target.value,
-                                            })
-                                        }
-                                        autoFocus
-                                    />
-                                </div>
-                                <div className="flex justify-end gap-3">
-                                    <button
-                                        type="button"
-                                        onClick={() => setIsRenameOpen(false)}
-                                        className="px-4 py-2 border rounded-md hover:bg-gray-50"
-                                    >
-                                        Cancel
-                                    </button>
-                                    <button
-                                        type="submit"
-                                        disabled={processing}
-                                        className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-                                    >
-                                        {processing ? "Renaming..." : "Save Changes"}
-                                    </button>
-                                </div>
-                            </form>
-                        </div>
-                    </div>
-                </div>
-            )}
-
             {isEditOpen && (
                 <div className="fixed inset-0 z-50 overflow-y-auto">
                     <div className="flex items-center justify-center min-h-screen px-4">
@@ -916,54 +1246,78 @@ const App = () => {
                             className="fixed inset-0 bg-black/50 transition-opacity"
                             onClick={() => setIsEditOpen(false)}
                         ></div>
-                        <div className="bg-white rounded-lg shadow-xl w-full max-w-md z-10 p-6">
+                        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md z-10 p-6">
                             <div className="flex justify-between items-center mb-4">
-                                <h3 className="text-lg font-medium">Edit Media</h3>
+                                <h3 className="text-lg font-medium text-gray-900 dark:text-white">Edit Media</h3>
                                 <button onClick={() => setIsEditOpen(false)}>
-                                    <Icon name="x" className="w-5 h-5 text-gray-400" />
+                                    <Icon name="x" className="w-5 h-5 text-gray-400 dark:text-gray-500" />
                                 </button>
                             </div>
                             <form onSubmit={handleEditSubmit}>
                                 <div className="space-y-4">
                                     <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Title</label>
+                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Display Name</label>
                                         <input
                                             type="text"
-                                            className="w-full border p-2 rounded"
+                                            placeholder="Custom display name (optional)"
+                                            className="w-full border border-gray-300 dark:border-gray-600 p-2 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
                                             value={editForm.custom_title}
                                             onChange={(e) => setEditForm(prev => ({ ...prev, custom_title: e.target.value }))}
                                         />
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
+                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Group Name</label>
                                         <input
                                             type="text"
-                                            className="w-full border p-2 rounded"
+                                            list="edit-titles-list"
+                                            className="w-full border border-gray-300 dark:border-gray-600 p-2 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                            value={editForm.title || ''}
+                                            onChange={(e) => setEditForm(prev => ({ ...prev, title: e.target.value }))}
+                                        />
+                                        <datalist id="edit-titles-list">
+                                            {titles.map((t) => (
+                                                <option key={t} value={t} />
+                                            ))}
+                                        </datalist>
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Category</label>
+                                        <input
+                                            type="text"
+                                            list="edit-categories-list"
+                                            className="w-full border border-gray-300 dark:border-gray-600 p-2 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                                             value={editForm.category}
                                             onChange={(e) => setEditForm(prev => ({ ...prev, category: e.target.value }))}
                                         />
+                                        <datalist id="edit-categories-list">
+                                            {categories.map((c) => (
+                                                <option key={c} value={c} />
+                                            ))}
+                                        </datalist>
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Tags</label>
+                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Tags</label>
                                         <input
                                             type="text"
-                                            className="w-full border p-2 rounded"
+                                            placeholder="tag1, tag2, tag3"
+                                            className="w-full border border-gray-300 dark:border-gray-600 p-2 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
                                             value={editForm.tags}
                                             onChange={(e) => setEditForm(prev => ({ ...prev, tags: e.target.value }))}
                                         />
+                                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Separate multiple tags with commas</p>
                                     </div>
                                 </div>
                                 <div className="mt-6 flex justify-end gap-3">
                                     <button
                                         type="button"
                                         onClick={() => setIsEditOpen(false)}
-                                        className="px-4 py-2 border rounded"
+                                        className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200"
                                     >
                                         Cancel
                                     </button>
                                     <button
                                         type="submit"
-                                        className="px-4 py-2 bg-blue-600 text-white rounded"
+                                        className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
                                     >
                                         Save
                                     </button>
@@ -981,8 +1335,8 @@ const App = () => {
                             className="fixed inset-0 bg-black/50 transition-opacity"
                             onClick={() => setIsUploadOpen(false)}
                         ></div>
-                        <div className="bg-white rounded-lg shadow-xl w-full max-w-lg z-10 p-6">
-                            <h3 className="text-lg font-medium mb-4">Upload Media</h3>
+                        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-lg z-10 p-6">
+                            <h3 className="text-lg font-medium mb-4 text-gray-900 dark:text-white">Upload Media</h3>
                             <form onSubmit={handleUploadSubmit}>
                                 <div className="space-y-4">
                                     <input
@@ -990,40 +1344,42 @@ const App = () => {
                                         name="file"
                                         onChange={handleUploadChange}
                                         required
-                                        className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                                        className="block w-full text-sm text-gray-500 dark:text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 dark:file:bg-blue-900 file:text-blue-700 dark:file:text-blue-300 hover:file:bg-blue-100 dark:hover:file:bg-blue-800"
                                     />
                                     <input
                                         type="text"
-                                        name="creator"
-                                        list="creators-list"
-                                        placeholder="Creator"
+                                        name="title"
+                                        list="titles-list"
+                                        placeholder="Title"
                                         required
-                                        className="w-full border p-2 rounded"
-                                        value={uploadForm.creator}
+                                        className="w-full border border-gray-300 dark:border-gray-600 p-2 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
+                                        value={uploadForm.title}
                                         onChange={handleUploadChange}
                                     />
-                                    <datalist id="creators-list">
-                                        <option value="breathholder" />
-                                        <option value="dumdum" />
+                                    <datalist id="titles-list">
+                                        {titles.map((t) => (
+                                            <option key={t} value={t} />
+                                        ))}
                                     </datalist>
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <input
-                                            type="text"
-                                            name="category"
-                                            placeholder="Category"
-                                            required
-                                            className="w-full border p-2 rounded"
-                                            value={uploadForm.category}
-                                            onChange={handleUploadChange}
-                                        />
+                                    <input
+                                        type="text"
+                                        name="category"
+                                        placeholder="Category"
+                                        required
+                                        className="w-full border border-gray-300 dark:border-gray-600 p-2 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
+                                        value={uploadForm.category}
+                                        onChange={handleUploadChange}
+                                    />
+                                    <div>
                                         <input
                                             type="text"
                                             name="tags"
-                                            placeholder="Tags..."
-                                            className="w-full border p-2 rounded"
+                                            placeholder="tag1, tag2, tag3"
+                                            className="w-full border border-gray-300 dark:border-gray-600 p-2 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
                                             value={uploadForm.tags}
                                             onChange={handleUploadChange}
                                         />
+                                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Separate multiple tags with commas</p>
                                     </div>
                                     <div className="flex items-center">
                                         <input
@@ -1032,11 +1388,11 @@ const App = () => {
                                             id="is_hidden"
                                             checked={uploadForm.is_hidden}
                                             onChange={handleUploadChange}
-                                            className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                                            className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700"
                                         />
                                         <label
                                             htmlFor="is_hidden"
-                                            className="ml-2 block text-sm text-gray-900"
+                                            className="ml-2 block text-sm text-gray-900 dark:text-gray-200"
                                         >
                                             Use as Hidden Collection Cover
                                         </label>
@@ -1046,7 +1402,7 @@ const App = () => {
                                     <button
                                         type="button"
                                         onClick={() => setIsUploadOpen(false)}
-                                        className="px-4 py-2 border rounded-md"
+                                        className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200"
                                     >
                                         Cancel
                                     </button>
@@ -1062,6 +1418,141 @@ const App = () => {
                         </div>
                     </div>
                 </div>
+            )}
+
+            {isBulkEditOpen && (
+                <div className="fixed inset-0 z-50 overflow-y-auto">
+                    <div className="flex items-center justify-center min-h-screen px-4">
+                        <div
+                            className="fixed inset-0 bg-black/50 transition-opacity"
+                            onClick={() => setIsBulkEditOpen(false)}
+                        ></div>
+                        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md z-10 p-6">
+                            <div className="flex justify-between items-center mb-4">
+                                <h3 className="text-lg font-medium text-gray-900 dark:text-white">
+                                    Bulk Edit ({selectedItems.size} items)
+                                </h3>
+                                <button onClick={() => setIsBulkEditOpen(false)}>
+                                    <Icon name="x" className="w-5 h-5 text-gray-400 dark:text-gray-500" />
+                                </button>
+                            </div>
+                            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                                Leave fields empty to keep existing values.
+                            </p>
+                            <form onSubmit={handleBulkEditSubmit}>
+                                <div className="space-y-4">
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                            Category
+                                        </label>
+                                        <input
+                                            type="text"
+                                            placeholder="Enter new category"
+                                            className="w-full border border-gray-300 dark:border-gray-600 p-2 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
+                                            value={bulkEditForm.category}
+                                            onChange={(e) => setBulkEditForm(prev => ({ ...prev, category: e.target.value }))}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                            Tags
+                                        </label>
+                                        <input
+                                            type="text"
+                                            placeholder="tag1, tag2, tag3"
+                                            className="w-full border border-gray-300 dark:border-gray-600 p-2 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
+                                            value={bulkEditForm.tags}
+                                            onChange={(e) => setBulkEditForm(prev => ({ ...prev, tags: e.target.value }))}
+                                        />
+                                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Separate multiple tags with commas</p>
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                            Tag Mode
+                                        </label>
+                                        <div className="flex gap-4">
+                                            <label className="flex items-center gap-2 cursor-pointer">
+                                                <input
+                                                    type="radio"
+                                                    name="tagMode"
+                                                    value="add"
+                                                    checked={bulkEditForm.tagMode === "add"}
+                                                    onChange={(e) => setBulkEditForm(prev => ({ ...prev, tagMode: e.target.value }))}
+                                                    className="text-blue-600"
+                                                />
+                                                <span className="text-sm text-gray-700 dark:text-gray-300">Add to existing</span>
+                                            </label>
+                                            <label className="flex items-center gap-2 cursor-pointer">
+                                                <input
+                                                    type="radio"
+                                                    name="tagMode"
+                                                    value="replace"
+                                                    checked={bulkEditForm.tagMode === "replace"}
+                                                    onChange={(e) => setBulkEditForm(prev => ({ ...prev, tagMode: e.target.value }))}
+                                                    className="text-blue-600"
+                                                />
+                                                <span className="text-sm text-gray-700 dark:text-gray-300">Replace all</span>
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="mt-6 flex justify-end gap-3">
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsBulkEditOpen(false)}
+                                        className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        disabled={processing || (!bulkEditForm.tags.trim() && !bulkEditForm.category.trim())}
+                                        className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                        {processing ? "Updating..." : "Apply to All"}
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {selectionMode && selectedItems.size > 0 && (
+                <div className="fixed bottom-6 left-1/2 transform -translate-x-1/2 z-40">
+                    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl border border-gray-200 dark:border-gray-700 px-4 py-3 flex items-center gap-4">
+                        <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
+                            {selectedItems.size} selected
+                        </span>
+                        <div className="h-6 w-px bg-gray-300 dark:bg-gray-600"></div>
+                        <button
+                            onClick={selectAllVisible}
+                            className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
+                        >
+                            Select All
+                        </button>
+                        <button
+                            onClick={clearSelection}
+                            className="text-sm text-gray-500 dark:text-gray-400 hover:underline"
+                        >
+                            Clear
+                        </button>
+                        <div className="h-6 w-px bg-gray-300 dark:bg-gray-600"></div>
+                        <button
+                            onClick={openBulkEditModal}
+                            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 rounded-lg flex items-center gap-2 text-sm font-medium transition-colors"
+                        >
+                            <Icon name="tag" className="w-4 h-4" />
+                            Edit Tags & Category
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            {branding.footer_message && !selectionMode && (
+                <footer className="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 py-3 px-4 text-center text-sm text-gray-600 dark:text-gray-400">
+                    {branding.footer_message}
+                </footer>
             )}
         </div>
     );

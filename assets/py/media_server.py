@@ -11,13 +11,81 @@ app = Flask(__name__)
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.abspath(os.path.join(SCRIPT_DIR, '../../'))
 ASSETS_FOLDER = os.path.join(PROJECT_ROOT, 'assets')
+CONFIG_FILE = os.path.join(PROJECT_ROOT, 'config.json')
 
-# New Database Directory: ./assets/db/
-DB_FOLDER = os.path.join(PROJECT_ROOT, 'assets', 'db')
+# Load configuration from config.json
+def load_config():
+    """Load configuration from config.json with fallback defaults."""
+    default_config = {
+        "server": {
+            "host": "127.0.0.1",
+            "port": 5000,
+            "debug": True
+        },
+        "paths": {
+            "media_folder": "/path/to/your/media/folder",
+            "db_folder": "assets/db"
+        },
+        "supported_formats": {
+            "images": [".jpg", ".jpeg", ".png", ".gif", ".webp"],
+            "videos": [".mp4", ".mov", ".avi", ".webm", ".mkv"]
+        },
+        "upload": {
+            "max_file_size_mb": 500
+        },
+        "branding": {
+            "site_name": "MediaServer",
+            "site_name_accent": "Local",
+            "footer_message": "",
+            "font_family": "system-ui, -apple-system, sans-serif",
+            "heading_font_family": ""
+        },
+        "appearance": {
+            "default_theme": "system"
+        }
+    }
+
+    if os.path.exists(CONFIG_FILE):
+        try:
+            with open(CONFIG_FILE, 'r') as f:
+                user_config = json.load(f)
+                # Merge user config with defaults (user config takes precedence)
+                for key in default_config:
+                    if key in user_config:
+                        if isinstance(default_config[key], dict):
+                            default_config[key].update(user_config[key])
+                        else:
+                            default_config[key] = user_config[key]
+                return default_config
+        except Exception as e:
+            print(f"Error loading config.json: {e}. Using defaults.")
+    else:
+        # Create default config file if it doesn't exist
+        try:
+            with open(CONFIG_FILE, 'w') as f:
+                json.dump(default_config, f, indent=4)
+            print(f"Created default config file at {CONFIG_FILE}")
+        except Exception as e:
+            print(f"Could not create config file: {e}")
+
+    return default_config
+
+CONFIG = load_config()
+
+# Apply configuration
+db_folder_path = CONFIG['paths']['db_folder']
+if not os.path.isabs(db_folder_path):
+    DB_FOLDER = os.path.join(PROJECT_ROOT, db_folder_path)
+else:
+    DB_FOLDER = db_folder_path
+
 LEGACY_DATA_FILE = os.path.join(PROJECT_ROOT, 'media_db.json')
 INDEX_FILE = os.path.join(PROJECT_ROOT, 'index.html')
-# We still allow reading media from the external drive
-MEDIA_FOLDER = '/mnt/d/Media/Private/categories'
+MEDIA_FOLDER = CONFIG['paths']['media_folder']
+
+# Supported file extensions from config
+IMG_EXTS = set(CONFIG['supported_formats']['images'])
+VID_EXTS = set(CONFIG['supported_formats']['videos'])
 
 # --- Initialization & Migration ---
 
@@ -31,7 +99,7 @@ def ensure_directories():
             pass
 
 def migrate_legacy_db():
-    """Splits the giant media_db.json into per-creator files if it exists."""
+    """Splits the giant media_db.json into per-title files if it exists."""
     if os.path.exists(LEGACY_DATA_FILE):
         print(f"Legacy database found at {LEGACY_DATA_FILE}. Starting migration...")
         try:
@@ -46,17 +114,17 @@ def migrate_legacy_db():
             if not data:
                 return
 
-            # Group by creator
+            # Group by title
             grouped_data = {}
             for item in data:
-                creator = item.get('creator', 'Uncategorized')
-                if creator not in grouped_data:
-                    grouped_data[creator] = []
-                grouped_data[creator].append(item)
+                title = item.get('title', 'Uncategorized')
+                if title not in grouped_data:
+                    grouped_data[title] = []
+                grouped_data[title].append(item)
 
             # Write individual files
-            for creator, items in grouped_data.items():
-                safe_name = secure_filename(creator) or 'Uncategorized'
+            for title, items in grouped_data.items():
+                safe_name = secure_filename(title) or 'Uncategorized'
                 file_path = os.path.join(DB_FOLDER, f"{safe_name}.json")
                 with open(file_path, 'w') as f:
                     json.dump(items, f, indent=4)
@@ -76,9 +144,9 @@ migrate_legacy_db()
 
 # --- Database Helpers ---
 
-def get_creator_filename(creator):
-    """Returns the JSON filename for a specific creator."""
-    safe_name = secure_filename(creator) or 'Uncategorized'
+def get_title_filename(title):
+    """Returns the JSON filename for a specific title."""
+    safe_name = secure_filename(title) or 'Uncategorized'
     return os.path.join(DB_FOLDER, f"{safe_name}.json")
 
 def load_all_media():
@@ -98,9 +166,9 @@ def load_all_media():
                 print(f"Error reading {filename}: {e}")
     return all_media
 
-def save_creator_data(creator, data):
-    """Saves a list of media items to a specific creator's file."""
-    filepath = get_creator_filename(creator)
+def save_title_data(title, data):
+    """Saves a list of media items to a specific title's file."""
+    filepath = get_title_filename(title)
     with open(filepath, 'w') as f:
         json.dump(data, f, indent=4)
 
@@ -120,16 +188,13 @@ def get_media():
 
 @app.route('/api/scan', methods=['POST'])
 def scan_media():
-    """Scans directory and adds new files to correct creator DBs."""
+    """Scans directory and adds new files to correct title DBs."""
     try:
         existing_items = load_all_media()
         existing_paths = {item['path'] for item in existing_items}
         
-        # We need to buffer new items by creator to minimize writes
-        new_items_by_creator = {}
-        
-        IMG_EXTS = {'.jpg', '.jpeg', '.png', '.gif', '.webp'}
-        VID_EXTS = {'.mp4', '.mov', '.avi', '.webm', '.mkv'}
+        # We need to buffer new items by title to minimize writes
+        new_items_by_title = {}
 
         print(f"Scanning: {MEDIA_FOLDER}")
 
@@ -141,15 +206,15 @@ def scan_media():
                     rel_path_web = rel_path.replace('\\', '/')
                     
                     if rel_path == '.':
-                        creator = "Uncategorized"
+                        title = "Uncategorized"
                         web_path = f"/media_content/{file}"
                     else:
-                        creator = rel_path.split(os.sep)[0]
+                        title = rel_path.split(os.sep)[0]
                         web_path = f"/media_content/{rel_path_web}/{file}"
                     
                     if web_path not in existing_paths:
-                        if creator not in new_items_by_creator:
-                            new_items_by_creator[creator] = []
+                        if title not in new_items_by_title:
+                            new_items_by_title[title] = []
 
                         media_type = 'image' if file_ext in IMG_EXTS else 'video'
                         new_entry = {
@@ -157,7 +222,7 @@ def scan_media():
                             'filename': file,
                             'original_name': file,
                             'custom_title': "", 
-                            'creator': creator,
+                            'title': title,
                             'category': 'Imported',
                             'tags': [],
                             'hidden': False,
@@ -165,20 +230,20 @@ def scan_media():
                             'path': web_path,
                             'real_path': os.path.join(root, file)
                         }
-                        new_items_by_creator[creator].append(new_entry)
+                        new_items_by_title[title].append(new_entry)
                         existing_paths.add(web_path) # Prevent duplicates in same scan run
 
         # Save updates
         total_added = 0
-        for creator, new_items in new_items_by_creator.items():
-            filepath = get_creator_filename(creator)
+        for title, new_items in new_items_by_title.items():
+            filepath = get_title_filename(title)
             current_data = []
             if os.path.exists(filepath):
                 with open(filepath, 'r') as f:
                     current_data = json.load(f)
             
             current_data.extend(new_items)
-            save_creator_data(creator, current_data)
+            save_title_data(title, current_data)
             total_added += len(new_items)
 
         return jsonify({'message': f'Scan complete. Added {total_added} new items.', 'added_count': total_added})
@@ -192,7 +257,7 @@ def upload_file():
         return jsonify({'error': 'No file part'}), 400
     
     file = request.files['file']
-    creator = request.form.get('creator', 'Unknown')
+    title = request.form.get('title', 'Unknown')
     category = request.form.get('category', 'Uncategorized')
     tags = request.form.get('tags', '')
     is_hidden = request.form.get('is_hidden') == 'true'
@@ -203,12 +268,11 @@ def upload_file():
     if file:
         filename = secure_filename(file.filename)
         file_ext = os.path.splitext(filename)[1].lower()
-        media_type = 'image' if file_ext in ['.jpg', '.jpeg', '.png', '.gif', '.webp'] else 'video'
-        if file_ext in ['.mp4', '.mov', '.avi', '.webm']: media_type = 'video'
+        media_type = 'image' if file_ext in IMG_EXTS else 'video' if file_ext in VID_EXTS else 'image'
 
-        creator_safe = secure_filename(creator)
+        title_safe = secure_filename(title)
         # Save physically
-        save_path = os.path.join(MEDIA_FOLDER, creator_safe)
+        save_path = os.path.join(MEDIA_FOLDER, title_safe)
         if not os.path.exists(save_path): os.makedirs(save_path)
         
         final_filename = f"{uuid.uuid4().hex[:8]}_{filename}"
@@ -222,29 +286,29 @@ def upload_file():
             'filename': final_filename,
             'original_name': filename,
             'custom_title': "",
-            'creator': creator,
+            'title': title,
             'category': category,
             'tags': tags_list,
             'hidden': is_hidden,
             'type': media_type,
-            'path': f"/media_content/{creator_safe}/{final_filename}"
+            'path': f"/media_content/{title_safe}/{final_filename}"
         }
 
-        # Load ONLY specific creator file
-        filepath = get_creator_filename(creator)
+        # Load ONLY specific title file
+        filepath = get_title_filename(title)
         data = []
         if os.path.exists(filepath):
             with open(filepath, 'r') as f:
                 data = json.load(f)
         
         data.append(new_entry)
-        save_creator_data(creator, data)
+        save_title_data(title, data)
 
         return jsonify(new_entry), 201
 
 @app.route('/api/update/<media_id>', methods=['POST'])
 def update_media(media_id):
-    """Updates an item. Scans files to find it. Handles creator moves."""
+    """Updates an item. Scans files to find it. Handles title moves."""
     data = request.json
     
     # We iterate all JSON files to find the item
@@ -262,25 +326,25 @@ def update_media(media_id):
                 item = items[item_index]
                 
                 # Check if Creator Changed (requires moving between files)
-                new_creator = data.get('creator')
-                old_creator = item['creator']
+                new_title = data.get('title')
+                old_title = item['title']
                 
-                if new_creator and new_creator != old_creator:
+                if new_title and new_title != old_title:
                     # Remove from this list
                     item = items.pop(item_index)
                     # Update fields
                     item.update({k: v for k, v in data.items() if k in item})
                     # Save current file (deletion)
-                    save_creator_data(old_creator, items)
+                    save_title_data(old_title, items)
                     
                     # Add to new file
-                    new_filepath = get_creator_filename(new_creator)
+                    new_filepath = get_title_filename(new_title)
                     new_items = []
                     if os.path.exists(new_filepath):
                         with open(new_filepath, 'r') as nf:
                             new_items = json.load(nf)
                     new_items.append(item)
-                    save_creator_data(new_creator, new_items)
+                    save_title_data(new_title, new_items)
                     
                     return jsonify({'message': 'Updated and moved successfully'})
                 
@@ -299,7 +363,7 @@ def update_media(media_id):
                         if field in data:
                             item[field] = data[field]
                             
-                    save_creator_data(old_creator, items)
+                    save_title_data(old_title, items)
                     return jsonify({'message': 'Updated successfully'})
                     
         except Exception as e:
@@ -319,13 +383,13 @@ def batch_update():
     updates_by_id = {u['id']: u for u in updates}
     
     # Track which files need saving
-    modified_creators = set()
+    modified_titles = set()
     
     # We essentially need to do a pass over the DB.
-    # Since batch updates (renaming collection) usually happens within one creator,
+    # Since batch updates (renaming collection) usually happens within one title,
     # we can optimize. But let's be safe and scan.
     
-    # Optimization: If all updates have the same 'creator' change, 
+    # Optimization: If all updates have the same 'title' change, 
     # we are likely moving a whole file content to another.
     
     # Simplified generic approach:
@@ -338,7 +402,7 @@ def batch_update():
                 items = json.load(f)
             
             file_modified = False
-            items_to_move = [] # (new_creator, item)
+            items_to_move = [] # (new_title, item)
             
             # Iterate backwards to allow safe removal
             for i in range(len(items) - 1, -1, -1):
@@ -347,9 +411,9 @@ def batch_update():
                     change = updates_by_id[item['id']]
                     
                     # Handle Creator Change (Move)
-                    if 'creator' in change and change['creator'] != item['creator']:
-                        item['creator'] = change['creator'] # Update object
-                        items_to_move.append((change['creator'], item))
+                    if 'title' in change and change['title'] != item['title']:
+                        item['title'] = change['title'] # Update object
+                        items_to_move.append((change['title'], item))
                         items.pop(i) # Remove from current
                         file_modified = True
                     else:
@@ -359,24 +423,24 @@ def batch_update():
             
             # Save if modified (items removed or updated in place)
             if file_modified:
-                # Determine original creator from filename is risky if sanitization collides
-                # But mostly fine. Better: rely on `save_creator_data` logic
+                # Determine original title from filename is risky if sanitization collides
+                # But mostly fine. Better: rely on `save_title_data` logic
                 # We can overwrite the file we just read.
                 with open(filepath, 'w') as f:
                     json.dump(items, f, indent=4)
             
             # Handle Moves
-            for new_creator, item in items_to_move:
+            for new_title, item in items_to_move:
                 # This is inefficient if moving 1000 items (opens file 1000 times)
                 # But acceptable for now or needs buffering.
                 # BUFFERING LOGIC:
-                tgt_path = get_creator_filename(new_creator)
+                tgt_path = get_title_filename(new_title)
                 tgt_data = []
                 if os.path.exists(tgt_path):
                     with open(tgt_path, 'r') as tf:
                         tgt_data = json.load(tf)
                 tgt_data.append(item)
-                save_creator_data(new_creator, tgt_data)
+                save_title_data(new_title, tgt_data)
 
         except Exception as e:
             print(f"Batch error in {filename}: {e}")
@@ -387,13 +451,28 @@ def batch_update():
 def serve_media(subpath):
     return send_from_directory(MEDIA_FOLDER, subpath)
 
-@app.route('/api/creators', methods=['GET'])
-def get_creators():
-    # Listing creators is now just listing filenames roughly
-    # But better to load DB to be accurate
+@app.route('/api/titles', methods=['GET'])
+def get_titles():
+    """Returns list of all unique titles."""
     data = load_all_media()
-    creators = list(set(item['creator'] for item in data))
-    return jsonify(creators)
+    titles = list(set(item['title'] for item in data if item.get('title')))
+    return jsonify(sorted(titles))
+
+@app.route('/api/categories', methods=['GET'])
+def get_categories():
+    """Returns list of all unique categories."""
+    data = load_all_media()
+    categories = list(set(item['category'] for item in data if item.get('category')))
+    return jsonify(sorted(categories))
+
+@app.route('/api/config', methods=['GET'])
+def get_public_config():
+    """Returns branding and other frontend-safe configuration."""
+    return jsonify({
+        'branding': CONFIG.get('branding', {}),
+        'appearance': CONFIG.get('appearance', {}),
+        'supported_formats': CONFIG.get('supported_formats', {})
+    })
 
 @app.route('/assets/<path:filename>')
 def serve_assets(filename):
@@ -402,8 +481,14 @@ def serve_assets(filename):
 
 
 if __name__ == '__main__':
+    host = CONFIG['server']['host']
+    port = CONFIG['server']['port']
+    debug = CONFIG['server']['debug']
+
     print("-------------------------------------------------------")
-    print(f"Server running at: http://127.0.0.1:5000")
+    print(f"Server running at: http://{host}:{port}")
+    print(f"Media folder: {MEDIA_FOLDER}")
     print(f"Database folder: {DB_FOLDER}")
+    print(f"Config file: {CONFIG_FILE}")
     print("-------------------------------------------------------")
-    app.run(debug=True, port=5000)
+    app.run(host=host, debug=debug, port=port)
