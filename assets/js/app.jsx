@@ -430,6 +430,22 @@ const App = () => {
 
     const getFileSortKey = (item) => (item.original_name || item.filename || "").toLowerCase();
 
+    const getPathSegments = (itemPath) => {
+        if (!itemPath || typeof itemPath !== "string") return [];
+        const marker = "/media_content/";
+        const idx = itemPath.indexOf(marker);
+        const sub = idx >= 0 ? itemPath.slice(idx + marker.length) : itemPath.replace(/^\/+/, "");
+        return sub.split("/").filter(Boolean);
+    };
+
+    const isPrefix = (full, prefix) => {
+        if (prefix.length > full.length) return false;
+        for (let i = 0; i < prefix.length; i += 1) {
+            if (full[i] !== prefix[i]) return false;
+        }
+        return true;
+    };
+
     const viewContent = useMemo(() => {
         if (searchQuery) {
             const q = searchQuery.toLowerCase();
@@ -470,17 +486,43 @@ const App = () => {
             };
         }
 
-        // Inside a folder - show items that match the selected group
+        // Inside a folder - show nested folders/files based on media path
         const selectedGroup = currentPath[0];
-        const currentFiles = media.filter((item) => {
+        const subPath = currentPath.slice(1);
+
+        const groupItems = media.filter((item) => {
             if (item.hidden) return false;
             return item[groupField] === selectedGroup;
         });
 
+        const foldersMap = {};
+        const files = [];
+
+        groupItems.forEach((item) => {
+            const segments = getPathSegments(item.path);
+            if (segments.length === 0) return;
+
+            const folderSegments = segments.slice(0, -1);
+            const relativeSegments =
+                segments[0] === selectedGroup ? folderSegments.slice(1) : folderSegments;
+
+            if (!isPrefix(relativeSegments, subPath)) return;
+
+            if (relativeSegments.length > subPath.length) {
+                const nextName = relativeSegments[subPath.length];
+                if (!foldersMap[nextName]) {
+                    foldersMap[nextName] = { name: nextName, items: [] };
+                }
+                foldersMap[nextName].items.push(item);
+            } else {
+                files.push(item);
+            }
+        });
+
         return {
             mode: "browse",
-            folders: [],
-            files: currentFiles.sort((a, b) =>
+            folders: Object.values(foldersMap).sort((a, b) => a.name.localeCompare(b.name)),
+            files: files.sort((a, b) =>
                 getFileSortKey(a).localeCompare(getFileSortKey(b), undefined, { numeric: true })
             ),
         };

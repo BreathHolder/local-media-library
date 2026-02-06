@@ -42,6 +42,9 @@ def load_config():
         },
         "appearance": {
             "default_theme": "system"
+        },
+        "integrity": {
+            "auto_fix_title_creator": False
         }
     }
 
@@ -87,6 +90,19 @@ MEDIA_FOLDER = CONFIG['paths']['media_folder']
 IMG_EXTS = set(CONFIG['supported_formats']['images'])
 VID_EXTS = set(CONFIG['supported_formats']['videos'])
 
+# --- Common Helpers ---
+
+def get_item_title(item):
+    """Returns a title using title/creator interchangeably with fallbacks."""
+    return item.get('title') or item.get('creator') or item.get('category') or 'Uncategorized'
+
+def set_item_title(item, title):
+    """Keeps title and creator in sync."""
+    if not title:
+        return
+    item['title'] = title
+    item['creator'] = title
+
 # --- Initialization & Migration ---
 
 def ensure_directories():
@@ -117,7 +133,7 @@ def migrate_legacy_db():
             # Group by title
             grouped_data = {}
             for item in data:
-                title = item.get('title', 'Uncategorized')
+                title = get_item_title(item)
                 if title not in grouped_data:
                     grouped_data[title] = []
                 grouped_data[title].append(item)
@@ -137,10 +153,6 @@ def migrate_legacy_db():
 
         except Exception as e:
             print(f"Error during migration: {e}")
-
-# Run setup
-ensure_directories()
-migrate_legacy_db()
 
 # --- Database Helpers ---
 
@@ -171,6 +183,68 @@ def save_title_data(title, data):
     filepath = get_title_filename(title)
     with open(filepath, 'w') as f:
         json.dump(data, f, indent=4)
+
+def integrity_check_title_creator(auto_fix=False):
+    """Scan DB for missing/mismatched title/creator and optionally fix."""
+    if not os.path.exists(DB_FOLDER):
+        print("Integrity check skipped: DB folder does not exist.")
+        return
+
+    files_scanned = 0
+    files_modified = 0
+    items_scanned = 0
+    items_fixed = 0
+
+    for filename in os.listdir(DB_FOLDER):
+        if not filename.endswith('.json'):
+            continue
+        filepath = os.path.join(DB_FOLDER, filename)
+        try:
+            with open(filepath, 'r') as f:
+                items = json.load(f)
+            if not isinstance(items, list):
+                continue
+        except Exception as e:
+            print(f"Integrity check error in {filename}: {e}")
+            continue
+
+        files_scanned += 1
+        changed = False
+
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            items_scanned += 1
+
+            title = item.get('title')
+            creator = item.get('creator')
+
+            # Determine canonical title using the shared helper
+            canonical = get_item_title(item)
+
+            if title != canonical or creator != canonical:
+                if auto_fix:
+                    set_item_title(item, canonical)
+                    items_fixed += 1
+                    changed = True
+                else:
+                    print(f"Integrity warning in {filename}: id={item.get('id')} title={title} creator={creator}")
+
+        if changed:
+            with open(filepath, 'w') as f:
+                json.dump(items, f, indent=4)
+            files_modified += 1
+
+    print("Integrity check summary:")
+    print(f"  files_scanned={files_scanned}")
+    print(f"  files_modified={files_modified}")
+    print(f"  items_scanned={items_scanned}")
+    print(f"  items_fixed={items_fixed}")
+
+# Run setup
+ensure_directories()
+migrate_legacy_db()
+integrity_check_title_creator(CONFIG.get('integrity', {}).get('auto_fix_title_creator', False))
 
 # --- Routes ---
 
@@ -223,6 +297,7 @@ def scan_media():
                             'original_name': file,
                             'custom_title': "", 
                             'title': title,
+                            'creator': title,
                             'category': 'Imported',
                             'tags': [],
                             'hidden': False,
@@ -287,6 +362,7 @@ def upload_file():
             'original_name': filename,
             'custom_title': "",
             'title': title,
+            'creator': title,
             'category': category,
             'tags': tags_list,
             'hidden': is_hidden,
@@ -326,14 +402,15 @@ def update_media(media_id):
                 item = items[item_index]
                 
                 # Check if Creator Changed (requires moving between files)
-                new_title = data.get('title')
-                old_title = item['title']
+                new_title = data.get('title') or data.get('creator')
+                old_title = get_item_title(item)
                 
                 if new_title and new_title != old_title:
                     # Remove from this list
                     item = items.pop(item_index)
                     # Update fields
                     item.update({k: v for k, v in data.items() if k in item})
+                    set_item_title(item, new_title)
                     # Save current file (deletion)
                     save_title_data(old_title, items)
                     
@@ -362,6 +439,8 @@ def update_media(media_id):
                     for field in ['custom_title', 'hidden', 'category']:
                         if field in data:
                             item[field] = data[field]
+                    if 'title' in data or 'creator' in data:
+                        set_item_title(item, new_title)
                             
                     save_title_data(old_title, items)
                     return jsonify({'message': 'Updated successfully'})
@@ -411,14 +490,18 @@ def batch_update():
                     change = updates_by_id[item['id']]
                     
                     # Handle Creator Change (Move)
-                    if 'title' in change and change['title'] != item['title']:
-                        item['title'] = change['title'] # Update object
-                        items_to_move.append((change['title'], item))
+                    new_title = change.get('title') or change.get('creator')
+                    old_title = get_item_title(item)
+                    if new_title and new_title != old_title:
+                        set_item_title(item, new_title) # Update object
+                        items_to_move.append((new_title, item))
                         items.pop(i) # Remove from current
                         file_modified = True
                     else:
                         # In-place update
                         item.update({k: v for k, v in change.items() if k in item})
+                        if 'title' in change or 'creator' in change:
+                            set_item_title(item, new_title)
                         file_modified = True
             
             # Save if modified (items removed or updated in place)
@@ -455,7 +538,7 @@ def serve_media(subpath):
 def get_titles():
     """Returns list of all unique titles."""
     data = load_all_media()
-    titles = list(set(item['title'] for item in data if item.get('title')))
+    titles = list(set(get_item_title(item) for item in data if get_item_title(item)))
     return jsonify(sorted(titles))
 
 @app.route('/api/categories', methods=['GET'])
