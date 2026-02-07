@@ -1,4 +1,4 @@
-const { useState, useEffect, useMemo, useCallback } = React;
+const { useState, useEffect, useMemo, useCallback, useRef } = React;
 
 // --- Mock Data ---
 const MOCK_DATA = [
@@ -72,6 +72,36 @@ const readUiState = () => {
     }
 };
 
+const readUrlState = () => {
+    if (typeof window === "undefined") return null;
+    const params = new URLSearchParams(window.location.search);
+    const hasView = params.has("view");
+    const hasPath = params.has("path");
+    const hasQuery = params.has("q");
+    if (!hasView && !hasPath && !hasQuery) return null;
+
+    const viewMode = params.get("view") === "category" ? "category" : "title";
+    const pathRaw = params.get("path") || "";
+    const currentPath = pathRaw ? pathRaw.split("/").filter(Boolean) : [];
+    const searchQuery = params.get("q") || "";
+    return {
+        viewMode,
+        currentPath,
+        searchQuery,
+        searchInput: searchQuery,
+    };
+};
+
+const buildUrlFromState = (currentPath, viewMode, searchQuery) => {
+    if (typeof window === "undefined") return "/";
+    const params = new URLSearchParams();
+    if (viewMode && viewMode !== "title") params.set("view", viewMode);
+    if (currentPath && currentPath.length > 0) params.set("path", currentPath.join("/"));
+    if (searchQuery) params.set("q", searchQuery);
+    const query = params.toString();
+    return `${window.location.pathname}${query ? `?${query}` : ""}`;
+};
+
 const Toast = ({ message, type, onClose }) => {
     useEffect(() => {
         const timer = setTimeout(onClose, 3000);
@@ -127,12 +157,13 @@ const Breadcrumbs = ({ path, onNavigate }) => {
     );
 };
 
-const FolderCard = ({ name, items, onClick }) => {
+const FolderCard = ({ name, items, coverItems, onClick }) => {
+    const coverSource = coverItems && coverItems.length > 0 ? coverItems : items;
     const coverItem =
-        items.find((i) => i.hidden && (i.tags || []).includes("_cover")) ||
-        items.find((i) => (i.tags || []).includes("_cover")) ||
-        items.find((i) => i.type === "image") ||
-        items[0];
+        coverSource.find((i) => i.hidden && (i.tags || []).includes("_cover")) ||
+        coverSource.find((i) => (i.tags || []).includes("_cover")) ||
+        coverSource.find((i) => i.type === "image") ||
+        coverSource[0];
 
     const visibleCount = items.filter((i) => !i.hidden).length;
 
@@ -292,7 +323,7 @@ const FileCard = ({ item, onClick, onEdit, onSetCover, selectionMode, isSelected
 };
 
 const App = () => {
-    const initialUiState = readUiState();
+    const initialUiState = { ...(readUiState() || {}), ...(readUrlState() || {}) };
     const [media, setMedia] = useState([]);
     const [loading, setLoading] = useState(true);
     const [serverActive, setServerActive] = useState(false);
@@ -313,6 +344,8 @@ const App = () => {
     const [viewMode, setViewMode] = useState(initialUiState?.viewMode || "title"); // "title" or "category"
 
     const [visibleCount, setVisibleCount] = useState(initialUiState?.visibleCount || 48);
+    const hasPushedUrl = useRef(false);
+    const isPopState = useRef(false);
 
     const [isUploadOpen, setIsUploadOpen] = useState(false);
     const [isEditOpen, setIsEditOpen] = useState(false);
@@ -446,6 +479,27 @@ const App = () => {
         return true;
     };
 
+    const getFolderSegments = (itemPath) => {
+        const segments = getPathSegments(itemPath);
+        if (segments.length <= 1) return [];
+        return segments.slice(0, -1);
+    };
+
+    const getRelativeFolderSegments = (itemPath, groupName) => {
+        const folderSegments = getFolderSegments(itemPath);
+        if (folderSegments.length === 0) return [];
+        if (folderSegments[0] === groupName) return folderSegments.slice(1);
+        return folderSegments;
+    };
+
+    const getCoverScopeKey = (itemPath) => {
+        const segments = getPathSegments(itemPath);
+        if (segments.length === 0) return "";
+        const root = segments[0];
+        const subfolders = segments.slice(1, -1);
+        return `${root}::${subfolders.join("/")}`;
+    };
+
     const viewContent = useMemo(() => {
         if (searchQuery) {
             const q = searchQuery.toLowerCase();
@@ -474,9 +528,13 @@ const App = () => {
             media.forEach((item) => {
                 const groupName = item[groupField] || "Uncategorized";
                 if (!groups[groupName]) {
-                    groups[groupName] = { name: groupName, items: [] };
+                    groups[groupName] = { name: groupName, items: [], coverItems: [] };
                 }
                 groups[groupName].items.push(item);
+                const relFolders = getRelativeFolderSegments(item.path, groupName);
+                if (relFolders.length === 0) {
+                    groups[groupName].coverItems.push(item);
+                }
             });
 
             return {
@@ -499,21 +557,19 @@ const App = () => {
         const files = [];
 
         groupItems.forEach((item) => {
-            const segments = getPathSegments(item.path);
-            if (segments.length === 0) return;
-
-            const folderSegments = segments.slice(0, -1);
-            const relativeSegments =
-                segments[0] === selectedGroup ? folderSegments.slice(1) : folderSegments;
+            const relativeSegments = getRelativeFolderSegments(item.path, selectedGroup);
 
             if (!isPrefix(relativeSegments, subPath)) return;
 
             if (relativeSegments.length > subPath.length) {
                 const nextName = relativeSegments[subPath.length];
                 if (!foldersMap[nextName]) {
-                    foldersMap[nextName] = { name: nextName, items: [] };
+                    foldersMap[nextName] = { name: nextName, items: [], coverItems: [] };
                 }
                 foldersMap[nextName].items.push(item);
+                if (relativeSegments.length === subPath.length + 1) {
+                    foldersMap[nextName].coverItems.push(item);
+                }
             } else {
                 files.push(item);
             }
@@ -578,8 +634,9 @@ const App = () => {
         e.stopPropagation();
         if (!serverActive) return showToast("Server offline", "error");
         setProcessing(true);
+        const scopeKey = getCoverScopeKey(item.path);
         const oldCover = media.find(
-            (m) => m.title === item.title && (m.tags || []).includes("_cover")
+            (m) => (m.tags || []).includes("_cover") && getCoverScopeKey(m.path) === scopeKey
         );
 
         try {
@@ -906,6 +963,39 @@ const App = () => {
     useEffect(() => {
         saveUiState();
     }, [saveUiState]);
+
+    useEffect(() => {
+        const handlePopState = (event) => {
+            isPopState.current = true;
+            const state = event.state || readUrlState() || {};
+            setViewMode(state.viewMode || "title");
+            setCurrentPath(state.currentPath || []);
+            const q = state.searchQuery || "";
+            setSearchQuery(q);
+            setSearchInput(q);
+            setVisibleCount(48);
+        };
+        window.addEventListener("popstate", handlePopState);
+        return () => window.removeEventListener("popstate", handlePopState);
+    }, []);
+
+    useEffect(() => {
+        const url = buildUrlFromState(currentPath, viewMode, searchQuery);
+        const state = { currentPath, viewMode, searchQuery };
+
+        if (isPopState.current) {
+            isPopState.current = false;
+            window.history.replaceState(state, "", url);
+            return;
+        }
+
+        if (!hasPushedUrl.current) {
+            window.history.replaceState(state, "", url);
+            hasPushedUrl.current = true;
+        } else {
+            window.history.pushState(state, "", url);
+        }
+    }, [currentPath, viewMode, searchQuery]);
 
     useEffect(() => {
         const handleScroll = () => saveUiState();
@@ -1249,6 +1339,7 @@ const App = () => {
                                     key={folder.name}
                                     name={folder.name}
                                     items={folder.items}
+                                    coverItems={folder.coverItems}
                                     onClick={() => navigateToFolder(folder.name)}
                                 />
                             ))}
